@@ -5,15 +5,18 @@ import asyncpg
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.filters.state import StateFilter
 
 load_dotenv()
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-FORM_URL = "https://example.com/form"
+FORM_URL = "https://nsp25.com/signup?sid=7628641"
 DATABASE_URL = os.getenv('DATABASE_URL')
+ADMIN_USER_IDS = [7852511755, 1342058150]
+SPONSOR_NUMBER = 7628641
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -61,6 +64,31 @@ async def get_user_data(tg_user_id: int):
         if conn:
             await conn.close()
 
+async def get_all_users():
+    try:
+        conn = await get_db_connection()
+        users = await conn.fetch('''
+            SELECT username, reg FROM users 
+            WHERE username IS NOT NULL 
+            ORDER BY created_at DESC
+        ''')
+        return users
+    except asyncpg.PostgresError as e:
+        logging.error(f"Database error: {e}")
+        return []
+    finally:
+        if conn:
+            await conn.close()
+
+def get_system_menu_keyboard():
+    return ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text="🔢 Ввести регистрационный номер")],
+        [KeyboardButton(text="📋 Мои данные")],
+        [KeyboardButton(text="🛒 Заказ продуктов")],
+        [KeyboardButton(text="👩‍⚕️ Мой нутрициолог")],
+        [KeyboardButton(text="❓ Поддержка")]
+    ], resize_keyboard=True)
+
 class UserStates(StatesGroup):
     waiting_for_reg_number = State()
 
@@ -74,32 +102,70 @@ async def start_handler(message: Message, state: FSMContext):
 Добро пожаловать в наш бот!
 
 Пожалуйста, прочтите инструкцию, перейдите по ссылке и заполните анкету:
-{FORM_URL}"""
+{FORM_URL}
+Номер сервисного центра 300"""
     
     await message.answer(welcome_text)
     
     await asyncio.sleep(5)
     
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔢 Ввести регистрационный номер", callback_data="enter_reg_number")],
-        [InlineKeyboardButton(text="📋 Мои данные", callback_data="my_data")],
-        [InlineKeyboardButton(text="🆘 Поддержка", callback_data="support")]
-    ])
-    
-    await message.answer("После заполнения анкеты выберите действие:", reply_markup=keyboard)
+    await message.answer("После заполнения анкеты отправьте этому боту регистрационный номер")
+    await state.set_state(UserStates.waiting_for_reg_number)
 
-@dp.message(UserStates.waiting_for_reg_number)
+@dp.message(UserStates.waiting_for_reg_number, lambda message: message.text not in ["❓ Поддержка", "📋 Мои данные", "🔢 Ввести регистрационный номер", "🛒 Заказ продуктов", "👩‍⚕️ Мой нутрициолог"])
 async def process_reg_number(message: Message, state: FSMContext):
     try:
         reg_number = int(message.text.strip())
         user_id = message.from_user.id
         
         await update_user_reg(user_id, reg_number)
-        await message.answer(f"Ваш регистрационный номер {reg_number} записан")
+        await message.answer(f"Ваш регистрационный номер {reg_number} записан", reply_markup=get_system_menu_keyboard())
+        
+        growth_text = """Присоединяйтесь для дальнейшего роста:
+
+https://t.me/+WTmB9LAAHmpjZGJi
+https://t.me/naturessunshine25
+https://naturessunshine.ru/"""
+        
+        await message.answer(growth_text)
         await state.clear()
         
+        
     except ValueError:
-        await message.answer("Пожалуйста, отправьте только число - ваш регистрационный номер.")
+        await message.answer(f"Пожалуйста, сначала заполните анкету по ссылке:\n{FORM_URL} \n Номер сервисного центра 300\n\nЗатем отправьте полученный регистрационный номер (только цифры).", reply_markup=get_system_menu_keyboard())
+
+@dp.message(lambda message: message.text == "❓ Поддержка", UserStates.waiting_for_reg_number)
+async def handle_support_during_reg(message: Message, state: FSMContext):
+    support_text = """❓ Поддержка
+
+Если у вас возникли вопросы или проблемы, обратитесь к администратору:
+@admin_username
+
+Или напишите на почту: support@example.com
+Обновить бота: /start"""
+    
+    await message.answer(support_text)
+    await message.answer("После получения помощи отправьте ваш регистрационный номер:")
+
+@dp.message(lambda message: message.text == "📋 Мои данные", UserStates.waiting_for_reg_number)
+async def handle_my_data_during_reg(message: Message):
+    user_data = await get_user_data(message.from_user.id)
+    
+    if user_data:
+        reg_number = user_data['reg'] if user_data['reg'] else "Не указан"
+        sponsor_number = SPONSOR_NUMBER
+        
+        referral_link = f"https://nsp25.com/signup?sid={reg_number}" if reg_number != "Не указан" else "Сначала укажите регистрационный номер"
+        
+        data_text = f"""📋 Мои данные
+
+Номер спонсора: {sponsor_number}
+Мой рег номер: {reg_number}
+Ваша личная реферальная ссылка: {referral_link}"""
+    else:
+        data_text = "❌ Данные не найдены. Попробуйте зарегистрироваться заново."
+    
+    await message.answer(data_text)
 
 @dp.callback_query(lambda c: c.data == "enter_reg_number")
 async def process_enter_reg_number(callback_query: CallbackQuery, state: FSMContext):
@@ -114,7 +180,7 @@ async def process_enter_reg_number(callback_query: CallbackQuery, state: FSMCont
 @dp.callback_query(lambda c: c.data == "support")
 async def process_support(callback_query: CallbackQuery):
     await callback_query.answer()
-    support_text = """🆘 Поддержка
+    support_text = """❓ Поддержка
 
 Если у вас возникли вопросы или проблемы, обратитесь к администратору:
 @admin_username
@@ -131,16 +197,124 @@ async def process_my_data(callback_query: CallbackQuery):
     
     if user_data:
         reg_number = user_data['reg'] if user_data['reg'] else "Не указан"
-        curator_reg = 2323  # По умолчанию как просил
+        sponsor_number = SPONSOR_NUMBER  # По умолчанию как просил
+        
+        referral_link = f"https://nsp25.com/signup?sid={reg_number}" if reg_number != "Не указан" else "Сначала укажите регистрационный номер"
         
         data_text = f"""📋 Мои данные
 
-Рег номер куратора: {curator_reg}
-Мой рег номер: {reg_number}"""
+Номер спонсора: {sponsor_number}
+Мой рег номер: {reg_number}
+Ваша личная реферальная ссылка: {referral_link}"""
     else:
         data_text = "❌ Данные не найдены. Попробуйте зарегистрироваться заново."
     
     await callback_query.message.answer(data_text)
+
+@dp.message(lambda message: message.text == "🔢 Ввести регистрационный номер", StateFilter(None))
+async def handle_enter_reg_number(message: Message, state: FSMContext):
+    await message.answer(f"Заполните анкету по ссылке:\n{FORM_URL}")
+    
+    await asyncio.sleep(5)
+    
+    await message.answer("Отправьте номер полученный в анкете")
+    await state.set_state(UserStates.waiting_for_reg_number)
+
+@dp.message(lambda message: message.text == "📋 Мои данные", StateFilter(None))
+async def handle_my_data(message: Message):
+    user_data = await get_user_data(message.from_user.id)
+    
+    if user_data:
+        reg_number = user_data['reg'] if user_data['reg'] else "Не указан"
+        sponsor_number = SPONSOR_NUMBER
+        
+        referral_link = f"https://nsp25.com/signup?sid={reg_number}" if reg_number != "Не указан" else "Сначала укажите регистрационный номер"
+        
+        data_text = f"""📋 Мои данные
+
+Номер спонсора: {sponsor_number}
+Мой рег номер: {reg_number}
+Ваша личная реферальная ссылка: {referral_link}"""
+    else:
+        data_text = "❌ Данные не найдены. Попробуйте зарегистрироваться заново."
+    
+    await message.answer(data_text)
+
+@dp.message(lambda message: message.text == "❓ Поддержка", StateFilter(None))
+async def handle_support(message: Message):
+    support_text = """❓ Поддержка
+
+Если у вас возникли вопросы или проблемы, обратитесь к администратору:
+@admin_username
+
+Или напишите на почту: support@example.com"""
+    
+    await message.answer(support_text)
+
+@dp.message(lambda message: message.text == "🛒 Заказ продуктов", StateFilter(None))
+async def handle_product_order(message: Message):
+    order_text = f"""🛒 Заказ продуктов
+
+https://nsp.com.ru/
+
+Нужно ввести свой регистрационный номер и номер спонсора {SPONSOR_NUMBER}
+Чтобы видеть оптовые цены"""
+    
+    await message.answer(order_text)
+
+@dp.message(lambda message: message.text == "🛒 Заказ продуктов", UserStates.waiting_for_reg_number)
+async def handle_product_order_during_reg(message: Message):
+    order_text = f"""🛒 Заказ продуктов
+
+https://nsp.com.ru/
+
+Нужно ввести свой регистрационный номер и номер спонсора {SPONSOR_NUMBER}
+Чтобы видеть оптовые цены"""
+    
+    await message.answer(order_text)
+
+@dp.message(lambda message: message.text == "👩‍⚕️ Мой нутрициолог", StateFilter(None))
+async def handle_nutritionist(message: Message):
+    nutritionist_text = """👩‍⚕️ Мой нутрициолог
+
+Имя: Надежда Артюх
+Мобильный: +7 922 420-14-99
+
+https://wa.me/79224201499"""
+    
+    await message.answer(nutritionist_text)
+
+@dp.message(lambda message: message.text == "👩‍⚕️ Мой нутрициолог", UserStates.waiting_for_reg_number)
+async def handle_nutritionist_during_reg(message: Message):
+    nutritionist_text = """👩‍⚕️ Мой нутрициолог
+
+Имя: Надежда Артюх
+Мобильный: +7 922 420-14-99
+
+https://wa.me/79224201499"""
+    
+    await message.answer(nutritionist_text)
+
+@dp.message(lambda message: message.text and message.text.lower() == "клиенты")
+async def handle_clients_command(message: Message):
+    if message.from_user.id not in ADMIN_USER_IDS:
+        await message.answer("Нет доступа")
+        return
+    
+    users = await get_all_users()
+    
+    if not users:
+        await message.answer("Пользователи не найдены")
+        return
+    
+    clients_text = "<b>Список клиентов:</b>\n\n"
+    
+    for user in users:
+        username = user['username'] if user['username'] else "Нет username"
+        reg = user['reg'] if user['reg'] else "Нет номера"
+        clients_text += f"<b>@{username}</b> | <code>{reg}</code>\n"
+    
+    await message.answer(clients_text, parse_mode="HTML")
 
 async def main():
     logging.basicConfig(level=logging.INFO)
