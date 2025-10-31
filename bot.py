@@ -95,9 +95,9 @@ async def is_admin(tg_user_id: int):
 
 def get_system_menu_keyboard():
     return ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text="🔢 Ввести регистрационный номер")],
         [KeyboardButton(text="📋 Мои данные"), KeyboardButton(text="🛒 Заказ продуктов")],
         [KeyboardButton(text="👩‍⚕️ Мой нутрициолог"), KeyboardButton(text="🎯 Моя цель")],
+        [KeyboardButton(text="🔢 Ввести регистрационный номер")],
         [KeyboardButton(text="❓ Поддержка")]
     ], resize_keyboard=True)
 
@@ -142,7 +142,7 @@ async def process_reg_number(message: Message, state: FSMContext):
         await update_user_reg(user_id, reg_number)
         await message.answer(f"Ваш регистрационный номер {reg_number} записан", reply_markup=get_system_menu_keyboard())
         
-        growth_text = """Присоединяйтесь для дальнейшего роста:
+        growth_text = """Выбирайте в меню свою цель и присоединяйтесь для дальнейшего роста:
 
 https://t.me/+WTmB9LAAHmpjZGJi
 https://t.me/naturessunshine25
