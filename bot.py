@@ -15,7 +15,6 @@ load_dotenv()
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 FORM_URL = "https://nsp25.com/signup?sid=7628641"
 DATABASE_URL = os.getenv('DATABASE_URL')
-ADMIN_USER_IDS = [7852511755, 1342058150]
 SPONSOR_NUMBER = 7628641
 
 bot = Bot(token=BOT_TOKEN)
@@ -80,13 +79,34 @@ async def get_all_users():
         if conn:
             await conn.close()
 
+async def is_admin(tg_user_id: int):
+    try:
+        conn = await get_db_connection()
+        user = await conn.fetchrow('''
+            SELECT role FROM users WHERE tg_user_id = $1
+        ''', tg_user_id)
+        return user and user['role'] == 1
+    except asyncpg.PostgresError as e:
+        logging.error(f"Database error: {e}")
+        return False
+    finally:
+        if conn:
+            await conn.close()
+
 def get_system_menu_keyboard():
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text="🔢 Ввести регистрационный номер")],
-        [KeyboardButton(text="📋 Мои данные")],
-        [KeyboardButton(text="🛒 Заказ продуктов")],
-        [KeyboardButton(text="👩‍⚕️ Мой нутрициолог")],
+        [KeyboardButton(text="📋 Мои данные"), KeyboardButton(text="🛒 Заказ продуктов")],
+        [KeyboardButton(text="👩‍⚕️ Мой нутрициолог"), KeyboardButton(text="🎯 Моя цель")],
         [KeyboardButton(text="❓ Поддержка")]
+    ], resize_keyboard=True)
+
+def get_goals_menu_keyboard():
+    return ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text="🏃 Постройнеть"), KeyboardButton(text="🧹 Почистить организм")],
+        [KeyboardButton(text="⚡ Больше энергии"), KeyboardButton(text="😌 Успокоиться")],
+        [KeyboardButton(text="🎯 Концентрация внимания")],
+        [KeyboardButton(text="⬅️ Назад в главное меню")]
     ], resize_keyboard=True)
 
 class UserStates(StatesGroup):
@@ -97,13 +117,14 @@ async def start_handler(message: Message, state: FSMContext):
     user = message.from_user
     await add_user_to_db(user)
     
-    welcome_text = f"""Привет, {user.first_name}! 👋
+    welcome_text = f"""Здравствуйте, {user.first_name}! 👋
 
-Добро пожаловать в наш бот!
+Добро пожаловать в NSP бот помощник!
 
 Пожалуйста, прочтите инструкцию, перейдите по ссылке и заполните анкету:
+(номер сервисного центра 300)
 {FORM_URL}
-Номер сервисного центра 300"""
+"""
     
     await message.answer(welcome_text)
     
@@ -112,7 +133,7 @@ async def start_handler(message: Message, state: FSMContext):
     await message.answer("После заполнения анкеты отправьте этому боту регистрационный номер")
     await state.set_state(UserStates.waiting_for_reg_number)
 
-@dp.message(UserStates.waiting_for_reg_number, lambda message: message.text not in ["❓ Поддержка", "📋 Мои данные", "🔢 Ввести регистрационный номер", "🛒 Заказ продуктов", "👩‍⚕️ Мой нутрициолог"])
+@dp.message(UserStates.waiting_for_reg_number, lambda message: message.text not in ["❓ Поддержка", "📋 Мои данные", "🔢 Ввести регистрационный номер", "🛒 Заказ продуктов", "👩‍⚕️ Мой нутрициолог", "🎯 Моя цель"])
 async def process_reg_number(message: Message, state: FSMContext):
     try:
         reg_number = int(message.text.strip())
@@ -161,7 +182,7 @@ async def handle_my_data_during_reg(message: Message):
 
 Номер спонсора: {sponsor_number}
 Мой рег номер: {reg_number}
-Ваша личная реферальная ссылка: {referral_link}"""
+Моя личная реферальная ссылка: {referral_link}"""
     else:
         data_text = "❌ Данные не найдены. Попробуйте зарегистрироваться заново."
     
@@ -292,12 +313,77 @@ async def handle_nutritionist_during_reg(message: Message):
 Мобильный: +7 922 420-14-99
 
 https://wa.me/79224201499"""
-    
+
     await message.answer(nutritionist_text)
+
+@dp.message(lambda message: message.text == "🎯 Моя цель", StateFilter(None))
+async def handle_my_goal(message: Message):
+    goal_text = """🎯 Моя цель
+
+Выберите свою цель:"""
+
+    await message.answer(goal_text, reply_markup=get_goals_menu_keyboard())
+
+@dp.message(lambda message: message.text == "🎯 Моя цель", UserStates.waiting_for_reg_number)
+async def handle_my_goal_during_reg(message: Message):
+    goal_text = """🎯 Моя цель
+
+Выберите свою цель:"""
+
+    await message.answer(goal_text, reply_markup=get_goals_menu_keyboard())
+
+@dp.message(lambda message: message.text == "⬅️ Назад в главное меню")
+async def handle_back_to_main_menu(message: Message):
+    await message.answer("Главное меню:", reply_markup=get_system_menu_keyboard())
+
+@dp.message(lambda message: message.text == "🏃 Постройнеть")
+async def handle_goal_lose_weight(message: Message):
+    goal_text = """🏃 Постройнеть
+
+Обратите внимание на продукт ААА
+Он зарекомендовал себя вот такими и такими результатами
+Вот отзывы"""
+    await message.answer(goal_text)
+
+@dp.message(lambda message: message.text == "🧹 Почистить организм")
+async def handle_goal_detox(message: Message):
+    goal_text = """🧹 Почистить организм
+
+Обратите внимание на продукт ААА
+Он зарекомендовал себя вот такими и такими результатами
+Вот отзывы"""
+    await message.answer(goal_text)
+
+@dp.message(lambda message: message.text == "⚡ Больше энергии")
+async def handle_goal_energy(message: Message):
+    goal_text = """⚡ Больше энергии
+
+Обратите внимание на продукт ААА
+Он зарекомендовал себя вот такими и такими результатами
+Вот отзывы"""
+    await message.answer(goal_text)
+
+@dp.message(lambda message: message.text == "😌 Успокоиться")
+async def handle_goal_calm(message: Message):
+    goal_text = """😌 Успокоиться
+
+Обратите внимание на продукт ААА
+Он зарекомендовал себя вот такими и такими результатами
+Вот отзывы"""
+    await message.answer(goal_text)
+
+@dp.message(lambda message: message.text == "🎯 Концентрация внимания")
+async def handle_goal_focus(message: Message):
+    goal_text = """🎯 Концентрация внимания
+
+Обратите внимание на продукт ААА
+Он зарекомендовал себя вот такими и такими результатами
+Вот отзывы"""
+    await message.answer(goal_text)
 
 @dp.message(lambda message: message.text and message.text.lower() == "клиенты")
 async def handle_clients_command(message: Message):
-    if message.from_user.id not in ADMIN_USER_IDS:
+    if not await is_admin(message.from_user.id):
         await message.answer("Нет доступа")
         return
     
