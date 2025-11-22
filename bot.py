@@ -9,6 +9,15 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters.state import StateFilter
+from goal_messages import (
+    get_women_beauty_message,
+    get_youth_message,
+    get_energy_message,
+    get_calm_message,
+    get_focus_message,
+    get_children_health_message,
+    get_chlorophyll_message
+)
 
 load_dotenv()
 
@@ -103,10 +112,10 @@ def get_system_menu_keyboard():
 
 def get_goals_menu_keyboard():
     return ReplyKeyboardMarkup(keyboard=[
-        [KeyboardButton(text="🏃 Постройнеть"), KeyboardButton(text="🧹 Почистить организм")],
+        [KeyboardButton(text="💃 Женская красота"), KeyboardButton(text="✨ Молодость")],
         [KeyboardButton(text="⚡ Больше энергии"), KeyboardButton(text="😌 Успокоиться")],
-        [KeyboardButton(text="🎯 Концентрация внимания")],
-        [KeyboardButton(text="⬅️ Назад в главное меню")]
+        [KeyboardButton(text="🎯 Концентрация внимания"), KeyboardButton(text="👶 Детское здоровье")],
+        [KeyboardButton(text="⬅️ Главное меню"), KeyboardButton(text="🌿 НА КАЖДЫЙ ДЕНЬ")]
     ], resize_keyboard=True)
 
 class UserStates(StatesGroup):
@@ -336,50 +345,33 @@ async def handle_my_goal_during_reg(message: Message):
 async def handle_back_to_main_menu(message: Message):
     await message.answer("Главное меню:", reply_markup=get_system_menu_keyboard())
 
-@dp.message(lambda message: message.text == "🏃 Постройнеть")
+@dp.message(lambda message: message.text == "💃 Женская красота")
 async def handle_goal_lose_weight(message: Message):
-    goal_text = """🏃 Постройнеть
+    await message.answer(get_women_beauty_message())
 
-Обратите внимание на продукт ААА
-Он зарекомендовал себя вот такими и такими результатами
-Вот отзывы"""
-    await message.answer(goal_text)
-
-@dp.message(lambda message: message.text == "🧹 Почистить организм")
-async def handle_goal_detox(message: Message):
-    goal_text = """🧹 Почистить организм
-
-Обратите внимание на продукт ААА
-Он зарекомендовал себя вот такими и такими результатами
-Вот отзывы"""
-    await message.answer(goal_text)
+@dp.message(lambda message: message.text == "✨ Молодость")
+async def handle_goal_youth(message: Message):
+    await message.answer(get_youth_message())
 
 @dp.message(lambda message: message.text == "⚡ Больше энергии")
 async def handle_goal_energy(message: Message):
-    goal_text = """⚡ Больше энергии
-
-Обратите внимание на продукт ААА
-Он зарекомендовал себя вот такими и такими результатами
-Вот отзывы"""
-    await message.answer(goal_text)
+    await message.answer(get_energy_message())
 
 @dp.message(lambda message: message.text == "😌 Успокоиться")
 async def handle_goal_calm(message: Message):
-    goal_text = """😌 Успокоиться
-
-Обратите внимание на продукт ААА
-Он зарекомендовал себя вот такими и такими результатами
-Вот отзывы"""
-    await message.answer(goal_text)
+    await message.answer(get_calm_message())
 
 @dp.message(lambda message: message.text == "🎯 Концентрация внимания")
 async def handle_goal_focus(message: Message):
-    goal_text = """🎯 Концентрация внимания
+    await message.answer(get_focus_message())
 
-Обратите внимание на продукт ААА
-Он зарекомендовал себя вот такими и такими результатами
-Вот отзывы"""
-    await message.answer(goal_text)
+@dp.message(lambda message: message.text == "👶 Детское здоровье")
+async def handle_goal_children_health(message: Message):
+    await message.answer(get_children_health_message())
+
+@dp.message(lambda message: message.text == "🌿 НА КАЖДЫЙ ДЕНЬ")
+async def handle_goal_chlorophyll(message: Message):
+    await message.answer(get_chlorophyll_message())
 
 @dp.message(lambda message: message.text and message.text.lower() == "клиенты")
 async def handle_clients_command(message: Message):
