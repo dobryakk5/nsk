@@ -341,7 +341,7 @@ async def handle_my_goal_during_reg(message: Message):
 
     await message.answer(goal_text, reply_markup=get_goals_menu_keyboard())
 
-@dp.message(lambda message: message.text == "⬅️ Назад в главное меню")
+@dp.message(lambda message: message.text == "⬅️ Главное меню")
 async def handle_back_to_main_menu(message: Message):
     await message.answer("Главное меню:", reply_markup=get_system_menu_keyboard())
 
